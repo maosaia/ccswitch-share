@@ -1,0 +1,11 @@
+[package]
+name = "ccswitch-share"
+version = "0.1.0"
+description = "Share API quota with a friend"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

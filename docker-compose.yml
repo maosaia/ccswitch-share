@@ -1,0 +1,14 @@
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      SECRET: ${SECRET:?请在 .env 里设置 SECRET}
+      TZ: Asia/Shanghai
+      RETENTION_DAYS: "7"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
