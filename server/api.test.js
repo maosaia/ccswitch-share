@@ -108,6 +108,7 @@ test('end-to-end encrypted share: relay never sees prompts or keys', async (t) =
   await waitFor(async () => (await call(a.guiPort, '/api/me')).json.relayOnline === true);
   await waitFor(async () => (await call(b.guiPort, '/api/me')).json.relayOnline === true);
 
+  const aMe = (await call(a.guiPort, '/api/me')).json;
   const bMe = (await call(b.guiPort, '/api/me')).json;
 
   const provider = await call(a.guiPort, '/api/providers', {
@@ -216,6 +217,33 @@ test('end-to-end encrypted share: relay never sees prompts or keys', async (t) =
 
   const chatLogs = (await call(a.guiPort, `/api/requests?shareId=${chatShare.id}`)).json;
   assert.equal(chatLogs[0].input_tokens + chatLogs[0].output_tokens, 10);
+
+  // Both directions: Bob shares his own API back to Alice.
+  const bobProvider = (await call(b.guiPort, '/api/providers', {
+    method: 'POST',
+    body: {
+      name: 'bob-claude',
+      protocol: 'anthropic',
+      baseUrl: `http://127.0.0.1:${upstream.port}`,
+      apiKey: 'sk-upstream-bob',
+    },
+  })).json;
+  const bobShare = (await call(b.guiPort, '/api/shares', {
+    method: 'POST',
+    body: {
+      providerId: bobProvider.id, consumerId: aMe.id, name: '给 Alice', dailyTokenLimit: 2000,
+    },
+  })).json;
+  const reverse = await fetch(`http://127.0.0.1:${a.proxyPort}/v1/messages`, {
+    method: 'POST',
+    headers: { 'x-api-key': bobShare.key, 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'reverse-ping' }] }),
+  });
+  assert.equal(reverse.status, 200);
+  assert.match(await reverse.text(), /TOPSECRET_REPLY/);
+  assert.equal(seen.messages.headers['x-api-key'], 'sk-upstream-bob');
+  assert.equal((await call(b.guiPort, '/api/shares')).json[0].usageToday, 18);
+  assert.equal((await call(a.guiPort, '/api/peers')).json[0].shares[0].key, bobShare.key);
 
   // Owner closes the client: consumer gets a clear 503 instead of hanging.
   a.close();
