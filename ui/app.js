@@ -122,6 +122,7 @@ function renderStatus() {
 }
 
 function renderCode() {
+  $('my-fingerprint').textContent = S.me ? `我的公钥指纹：${S.me.fingerprint}` : '';
   if (!S.pairCode) {
     $('code-display').textContent = '— — — — — —';
     $('code-state').textContent = '未生成';
@@ -150,7 +151,7 @@ function renderPeerCards() {
       <div class="avatar">${initial(p.name)}</div>
       <div class="peer-meta">
         <strong>${esc(p.name)}</strong>
-        <span class="muted">${p.shares.length ? `${p.shares.length} 个通道` : '还没有通道'}</span>
+        <span class="muted">${p.shares.length ? `${p.shares.length} 个通道` : '还没有通道'} · ${esc(p.fingerprint || '')}</span>
       </div>
       ${onlineDot(p.online)}
     </div>`).join('');

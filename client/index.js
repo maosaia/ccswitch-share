@@ -75,6 +75,10 @@ function maskKey(key) {
   return key.length <= 8 ? '****' : key.slice(0, 3) + '…' + key.slice(-4);
 }
 
+function fingerprint(pub) {
+  return crypto.createHash('sha256').update(String(pub.x) + String(pub.y)).digest('hex').slice(0, 16);
+}
+
 function serveStatic(res, pathname) {
   const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
   const file = path.join(UI_DIR, rel);
@@ -280,6 +284,7 @@ async function startClient({
           relayUrl: config.relayUrl,
           relayOnline: agentReady,
           proxyPort,
+          fingerprint: fingerprint(config.pub),
         }
         : { configured: false, proxyPort });
     }
@@ -397,7 +402,10 @@ async function startClient({
       }
     }
 
-    if (resource === 'peers' && req.method === 'GET') return send(res, 200, await refreshPeers());
+    if (resource === 'peers' && req.method === 'GET') {
+      const list = await refreshPeers();
+      return send(res, 200, list.map((p) => ({ ...p, fingerprint: fingerprint(p.pubKey) })));
+    }
     if (resource === 'pair' && req.method === 'GET') return send(res, 200, await relay('/api/pair'));
     if (resource === 'pair' && sub === 'code' && req.method === 'POST') {
       return send(res, 200, await relay('/api/pair/code', { method: 'POST' }));
