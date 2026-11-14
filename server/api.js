@@ -58,7 +58,13 @@ function localDate(ts) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function createApi({ db, cipher, codes, attempts, pairTtlMs, isOnline }) {
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+function createApi({ db, cipher, codes, attempts, pairTtlMs, isOnline, maxMembers, joinCode, clientIp }) {
   const usageToday = (shareId) =>
     db.prepare(
       'SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS t FROM requests WHERE share_id = ? AND created_at >= ?',
@@ -113,12 +119,17 @@ function createApi({ db, cipher, codes, attempts, pairTtlMs, isOnline }) {
     const sub = parts[2] || '';
 
     if (req.method === 'POST' && resource === 'onboard') {
-      const { name, pubKey } = await readJson(req);
+      const { name, pubKey, joinCode: suppliedCode } = await readJson(req);
       const clean = String(name || '').trim().slice(0, 40);
       if (!clean) return fail(res, 400, '昵称不能为空');
       if (!pubKey || pubKey.kty !== 'EC' || pubKey.crv !== 'P-256' || !pubKey.x || !pubKey.y) {
         return fail(res, 400, '缺少有效的设备公钥');
       }
+      if (joinCode && !safeEqual(suppliedCode || '', joinCode)) {
+        return fail(res, 403, '邀请码不正确');
+      }
+      const count = db.prepare('SELECT COUNT(*) AS c FROM members').get().c;
+      if (count >= maxMembers) return fail(res, 403, '该中转的成员名额已满');
       const token = crypto.randomBytes(32).toString('hex');
       const id = newId();
       const pub = JSON.stringify({ kty: pubKey.kty, crv: pubKey.crv, x: pubKey.x, y: pubKey.y });
@@ -199,7 +210,7 @@ function createApi({ db, cipher, codes, attempts, pairTtlMs, isOnline }) {
         return send(res, 200, { code, expiresAt });
       }
       if (sub === 'redeem' && req.method === 'POST') {
-        const ip = req.socket.remoteAddress || '?';
+        const ip = clientIp(req);
         const now = Date.now();
         const hits = (attempts.get(ip) || []).filter((t) => now - t < 60000);
         if (hits.length >= 5) return fail(res, 429, '尝试太频繁，请稍后再试');

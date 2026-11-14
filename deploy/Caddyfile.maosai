@@ -3,6 +3,10 @@ maosai.vip, www.maosai.vip {
 	encode @site gzip
 
 	handle_path /ccshare/* {
+		request_body {
+			max_size 30MB
+		}
+		header Cache-Control "no-store"
 		reverse_proxy 127.0.0.1:8787 {
 			flush_interval -1
 		}

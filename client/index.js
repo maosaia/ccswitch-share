@@ -75,6 +75,12 @@ function maskKey(key) {
   return key.length <= 8 ? '****' : key.slice(0, 3) + '…' + key.slice(-4);
 }
 
+// Blocks DNS-rebinding pages: only loopback Host headers may touch the local API/proxy.
+function hostAllowed(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  return host.startsWith('127.0.0.1') || host.startsWith('localhost') || host.startsWith('[::1]');
+}
+
 function fingerprint(pub) {
   return crypto.createHash('sha256').update(String(pub.x) + String(pub.y)).digest('hex').slice(0, 16);
 }
@@ -299,7 +305,7 @@ async function startClient({
       const r = await fetch(relayUrl + '/api/onboard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, pubKey: identity.pub }),
+        body: JSON.stringify({ name, pubKey: identity.pub, joinCode: b.joinCode }),
         signal: AbortSignal.timeout(15000),
       });
       const data = await r.json();
@@ -436,13 +442,7 @@ async function startClient({
   }
 
   const gui = http.createServer(async (req, res) => {
-    res.setHeader('access-control-allow-origin', '*');
-    res.setHeader('access-control-allow-headers', 'authorization, content-type');
-    res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204).end();
-      return;
-    }
+    if (!hostAllowed(req)) return fail(res, 403, 'forbidden');
     const url = new URL(req.url, 'http://localhost');
     try {
       if (url.pathname.startsWith('/api/')) return await apiRoute(req, res, url);
@@ -456,6 +456,7 @@ async function startClient({
 
   const proxy = http.createServer(async (req, res) => {
     res.on('error', () => {});
+    if (!hostAllowed(req)) return fail(res, 403, 'forbidden');
     const url = new URL(req.url, 'http://localhost');
     try {
       return await proxyRoute(req, res, url);

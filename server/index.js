@@ -82,11 +82,14 @@ function readBody(req, limit) {
 
 async function startServer({
   port = Number(process.env.PORT) || 8787,
-  host = '0.0.0.0',
+  host = process.env.HOST || '0.0.0.0',
   dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data'),
   secret,
   pairTtlMs = 10 * 60 * 1000,
   retentionDays = Number(process.env.RETENTION_DAYS) || 7,
+  maxMembers = Number(process.env.MAX_MEMBERS) || 2,
+  joinCode = process.env.JOIN_CODE || '',
+  rateLimitPerMin = Number(process.env.RATE_LIMIT_PER_MIN) || 120,
 } = {}) {
   if (!secret) throw new Error('SECRET is required');
   const db = openDb(dataDir);
@@ -95,8 +98,40 @@ async function startServer({
   const attempts = new Map();
   const sockets = new Map();
   const pending = new Map();
+  const authFailures = new Map();
+  const shareHits = new Map();
   const isOnline = (memberId) => sockets.has(memberId);
-  const apiRoute = createApi({ db, cipher, codes, attempts, pairTtlMs, isOnline });
+  const clientIp = (req) => {
+    const xff = req.headers['x-forwarded-for'];
+    if (typeof xff === 'string' && xff) return xff.split(',')[0].trim();
+    return req.socket.remoteAddress || '?';
+  };
+  const apiRoute = createApi({
+    db, cipher, codes, attempts, pairTtlMs, isOnline, maxMembers, joinCode, clientIp,
+  });
+
+  function authFailureBlocked(ip) {
+    const now = Date.now();
+    const entry = authFailures.get(ip);
+    if (!entry || now > entry.reset) {
+      authFailures.set(ip, { count: 1, reset: now + 60000 });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > 30;
+  }
+
+  function shareRateBlocked(shareId) {
+    const now = Date.now();
+    const hits = (shareHits.get(shareId) || []).filter((t) => now - t < 60000);
+    if (hits.length >= rateLimitPerMin) {
+      shareHits.set(shareId, hits);
+      return true;
+    }
+    hits.push(now);
+    shareHits.set(shareId, hits);
+    return false;
+  }
 
   function cleanupPending(id, message) {
     const p = pending.get(id);
@@ -137,14 +172,21 @@ async function startServer({
     const protocol = fullPath.startsWith('/v1/messages') ? 'anthropic' : 'openai';
     const auth = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
     const key = auth ? auth[1].trim() : String(req.headers['x-api-key'] || '');
-    if (!key.startsWith('sk-share-')) return protoError(res, protocol, 401, '缺少共享 Key');
+    if (!key.startsWith('sk-share-')) {
+      if (authFailureBlocked(clientIp(req))) return protoError(res, protocol, 429, '请求太频繁');
+      return protoError(res, protocol, 401, '缺少共享 Key');
+    }
 
     const share = db.prepare('SELECT * FROM shares WHERE key_hash = ?').get(sha256(key));
-    if (!share) return protoError(res, protocol, 401, '共享 Key 无效');
+    if (!share) {
+      if (authFailureBlocked(clientIp(req))) return protoError(res, protocol, 429, '请求太频繁');
+      return protoError(res, protocol, 401, '共享 Key 无效');
+    }
     if (!share.enabled) return protoError(res, protocol, 403, '共享通道已停用');
     if (share.protocol !== protocol) {
       return protoError(res, protocol, 400, `该通道是 ${share.protocol} 协议，不能用于当前客户端`);
     }
+    if (shareRateBlocked(share.id)) return protoError(res, protocol, 429, '请求频率超出限制');
 
     const day = new Date();
     day.setHours(0, 0, 0, 0);
@@ -190,13 +232,6 @@ async function startServer({
   }
 
   const server = http.createServer(async (req, res) => {
-    res.setHeader('access-control-allow-origin', '*');
-    res.setHeader('access-control-allow-headers', 'authorization, content-type, x-api-key, anthropic-version, anthropic-beta');
-    res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204).end();
-      return;
-    }
     const url = new URL(req.url, 'http://localhost');
     try {
       if (url.pathname.startsWith('/api/')) return await apiRoute(req, res, url);

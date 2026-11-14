@@ -307,3 +307,31 @@ test('pair code is single use and expires', async (t) => {
   });
   assert.equal(expired.status, 400);
 });
+
+test('onboarding requires the invite code and respects the member cap', async (t) => {
+  const dir = tmpDir('gate');
+  const relay = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: dir, secret: 'test-secret',
+    joinCode: 'letmein-123', maxMembers: 2,
+  });
+  const base = `http://127.0.0.1:${relay.port}`;
+  t.after(() => {
+    relay.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const reg = async (name, joinCode) => {
+    const identity = await createIdentity();
+    const res = await fetch(base + '/api/onboard', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, pubKey: identity.pub, joinCode }),
+    });
+    return res.status;
+  };
+
+  assert.equal(await reg('NoCode', ''), 403);
+  assert.equal(await reg('Alice', 'letmein-123'), 200);
+  assert.equal(await reg('Bob', 'letmein-123'), 200);
+  assert.equal(await reg('Mallory', 'letmein-123'), 403);
+});

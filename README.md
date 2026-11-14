@@ -53,21 +53,7 @@ location / {
 }
 ```
 
-环境变量：`SECRET`（必填，加密 share key 用）、`PORT`、`DATA_DIR`、`RETENTION_DAYS`（元数据保留天数，默认 7）、`TZ`（每日额度重置时区）。
-
-### 复用一个已有的 Caddy 站点（不需要新域名/端口）
-
-在现有站点块里加一段 `handle_path`，Caddy 会把 `/ccshare` 前缀去掉再转发给 relay：
-
-```caddyfile
-handle_path /ccshare/* {
-	reverse_proxy 127.0.0.1:8787 {
-		flush_interval -1
-	}
-}
-```
-
-客户端的中转地址填 `https://你的域名/ccshare`。Node 24 可以直接解压到 `/opt/node24` 并软链到 `/usr/local/bin`，服务用 `deploy/ccswitch-share.service`，环境变量放 `/etc/ccswitch-share.env`（`SECRET`、`PORT=8787`、`DATA_DIR`、`TZ=Asia/Shanghai`）。
+环境变量：`SECRET`（必填，加密 share key 用）、`HOST`（反代部署填 `127.0.0.1`）、`PORT`、`DATA_DIR`、`RETENTION_DAYS`（元数据保留天数，默认 7）、`TZ`（每日额度重置时区）、`MAX_MEMBERS`（默认 2）、`JOIN_CODE`（设置后注册必须带邀请码）、`RATE_LIMIT_PER_MIN`（单通道每分钟请求上限，默认 120）。
 
 ## 使用流程
 
@@ -107,6 +93,11 @@ env_key = "FRIEND_API_KEY"
 - 配对页会显示双方公钥指纹（前 16 位十六进制）；想防中转服务器换公钥，语音核对一下指纹即可。
 - 日限额由中转按出额度方上报的 usage 累计，超出返回 429。
 - 对方客户端离线时，请求返回 503，而不是挂住。
+- 中转默认只监听 `127.0.0.1`（反代部署设 `HOST=127.0.0.1`），TLS 由 Caddy 终止并带 HSTS；服务器防火墙只放行 SSH / 80 / 443。
+- 注册需要邀请码且受 `MAX_MEMBERS` 限制；配对码 10 分钟、单次、每 IP 每分钟 5 次；每条通道每分钟请求数受限；无效 share key 触发失败限流。
+- 中转以独立低权限用户运行，systemd 沙箱限制文件系统、设备、内核和系统调用。
+- 本机客户端只监听 `127.0.0.1`，校验 `Host` 头（防 DNS rebinding），不返回 CORS 头。
+- 残留风险：本机 `client-data/providers.json` 里的 API Key 是明文，属于本机信任边界；服务器管理员仍能看到元数据和流量大小。
 
 ## 测试
 

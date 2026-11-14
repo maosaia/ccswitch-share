@@ -393,9 +393,10 @@ function wire() {
   $('setup-go').onclick = async () => {
     const relayUrl = $('setup-url').value.trim();
     const name = $('setup-name').value.trim();
+    const joinCode = $('setup-join').value.trim();
     if (!relayUrl || !name) return toast('请填写服务器地址和昵称', true);
     try {
-      await api('/api/onboard', { method: 'POST', body: { relayUrl, name } });
+      await api('/api/onboard', { method: 'POST', body: { relayUrl, name, joinCode } });
       location.reload();
     } catch (err) {
       toast('连接失败：' + err.message, true);

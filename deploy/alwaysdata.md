@@ -9,7 +9,7 @@ alwaysdata 免费计划提供 Node.js、WebSocket、HTTPS 子域名和持久磁�
    - Type: `Node.js`
    - Command: `node server/index.js`
    - Working directory: `/home/<你的账号>/ccswitch-share`
-   - Environment: `SECRET=<openssl rand -hex 32 的输出>`、`DATA_DIR=/home/<你的账号>/ccswitch-share/data`
+   - Environment: `SECRET=<openssl rand -hex 32 的输出>`、`DATA_DIR=/home/<你的账号>/ccswitch-share/data`、`JOIN_CODE=<一串随机字符>`、`MAX_MEMBERS=2`
 3. 记下系统分配的域名，形如 `https://<账号>.alwaysdata.net`。
 
 ## 2. 上传代码

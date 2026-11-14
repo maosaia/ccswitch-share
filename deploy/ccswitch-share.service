@@ -8,13 +8,26 @@ User=ccswitch
 Group=ccswitch
 WorkingDirectory=/srv/ccswitch-share
 EnvironmentFile=/etc/ccswitch-share.env
+Environment=HOST=127.0.0.1
 ExecStart=/usr/local/bin/node server/index.js
 Restart=always
 RestartSec=3
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallFilter=@system-service
 ReadWritePaths=/var/lib/ccswitch-share
 
 [Install]
