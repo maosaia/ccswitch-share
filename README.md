@@ -55,6 +55,20 @@ location / {
 
 环境变量：`SECRET`（必填，加密 share key 用）、`PORT`、`DATA_DIR`、`RETENTION_DAYS`（元数据保留天数，默认 7）、`TZ`（每日额度重置时区）。
 
+### 复用一个已有的 Caddy 站点（不需要新域名/端口）
+
+在现有站点块里加一段 `handle_path`，Caddy 会把 `/ccshare` 前缀去掉再转发给 relay：
+
+```caddyfile
+handle_path /ccshare/* {
+	reverse_proxy 127.0.0.1:8787 {
+		flush_interval -1
+	}
+}
+```
+
+客户端的中转地址填 `https://你的域名/ccshare`。Node 24 可以直接解压到 `/opt/node24` 并软链到 `/usr/local/bin`，服务用 `deploy/ccswitch-share.service`，环境变量放 `/etc/ccswitch-share.env`（`SECRET`、`PORT=8787`、`DATA_DIR`、`TZ=Asia/Shanghai`）。
+
 ## 使用流程
 
 1. 双方打开客户端，填中转地址和昵称，创建身份（本机生成 ECDH 密钥，公钥上传，私钥不出本机）。

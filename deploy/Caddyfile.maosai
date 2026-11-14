@@ -1,0 +1,24 @@
+maosai.vip, www.maosai.vip {
+	@site not path /ccshare/*
+	encode @site gzip
+
+	handle_path /ccshare/* {
+		reverse_proxy 127.0.0.1:8787 {
+			flush_interval -1
+		}
+	}
+
+	reverse_proxy 127.0.0.1:8000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+	log {
+		output file /var/log/caddy/skill-market.log
+	}
+}

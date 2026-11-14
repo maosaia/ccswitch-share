@@ -1,0 +1,21 @@
+[Unit]
+Description=ccswitch-share relay
+After=network.target
+
+[Service]
+Type=simple
+User=ccswitch
+Group=ccswitch
+WorkingDirectory=/srv/ccswitch-share
+EnvironmentFile=/etc/ccswitch-share.env
+ExecStart=/usr/local/bin/node server/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ccswitch-share
+
+[Install]
+WantedBy=multi-user.target
