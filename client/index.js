@@ -465,8 +465,14 @@ async function startClient({
     }
   });
 
-  await new Promise((resolve) => gui.listen(guiPort, host, resolve));
-  await new Promise((resolve) => proxy.listen(proxyPort, host, resolve));
+  const listen = (server, port, label) => new Promise((resolve, reject) => {
+    server.once('error', (err) => reject(new Error(
+      `${label}端口 ${port} 无法监听（${err.code || err.message}）；用 CLIENT_PORT / PROXY_PORT 换一个端口`,
+    )));
+    server.listen(port, host, resolve);
+  });
+  await listen(gui, guiPort, '界面');
+  await listen(proxy, proxyPort, '本机代理');
   const actualGuiPort = gui.address().port;
   const actualProxyPort = proxy.address().port;
   if (config) connectAgent();

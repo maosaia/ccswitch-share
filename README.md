@@ -100,6 +100,17 @@ npm test
 
 覆盖：ECDH 对称性与加解密、四种 usage 解析、配对码单次/过期、完整双客户端链路（Anthropic 非流式、OpenAI 流式、限额 429、离线 503），以及“中转数据库里搜不到 prompt / 回复 / 上游 Key”的断言。
 
+## 桌面外壳打包
+
+需要 Rust（MSVC 工具链）、Visual Studio Build Tools 和 WebView2：
+
+```bash
+npm run tauri build -- --bundles nsis
+# 产物：src-tauri/target/release/bundle/nsis/ccswitch-share_0.1.0_x64-setup.exe
+```
+
+外壳窗口加载 `http://127.0.0.1:8787`，所以运行前先 `npm start` 起本机客户端。已在本机 Windows 11 + rustc 1.100 + MSVC 上实测：exe 启动、窗口渲染、安装包生成均正常。
+
 ## 目录
 
 - `client/` — 本机客户端：图形界面、本机代理、WebSocket 代理端
